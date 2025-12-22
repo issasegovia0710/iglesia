@@ -102,6 +102,13 @@ function App() {
   const [content, setContent] = useState(defaultContent);
   const [loadingContent, setLoadingContent] = useState(true);
 
+  // Admin / edición
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [savingContent, setSavingContent] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+
   /* ====== PALETA ====== */
   const colors = {
     accentGold: "#d4af37",
@@ -147,7 +154,6 @@ function App() {
         }
         const data = await res.json();
 
-        // Mezclar lo que viene de Supabase con el default para no tronar por campos faltantes
         const merged = {
           ...defaultContent,
           ...data,
@@ -319,11 +325,10 @@ function App() {
     borderRadius: "999px",
     overflow: "hidden",
     boxShadow: "0 18px 40px rgba(15,23,42,0.25)",
-    border: `4px solid colors.accentGoldSoft`,
+    border: `4px solid ${colors.accentGoldSoft}`,
     background:
       "radial-gradient(circle at 30% 20%, rgba(255,255,255,0.7), transparent 55%)",
     transition: "transform 0.4s ease, box-shadow 0.4s ease",
-    borderColor: colors.accentGoldSoft,
   };
 
   const heroImageStyle = {
@@ -537,6 +542,49 @@ function App() {
       : heroImageWrapperStyleBase.boxShadow,
   };
 
+  /* ====== HANDLERS ADMIN ====== */
+
+  const handleAdminButtonClick = () => {
+    if (!isAdmin) {
+      setShowLoginModal(true);
+    } else {
+      setShowAdminPanel((prev) => !prev);
+    }
+  };
+
+  const handleAdminLoginSuccess = () => {
+    setIsAdmin(true);
+    setShowLoginModal(false);
+    setShowAdminPanel(true);
+  };
+
+  const handleSaveContent = async (updatedContent) => {
+    setSavingContent(true);
+    setSaveMessage("");
+    try {
+      const res = await fetch("http://localhost:4000/api/content", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedContent),
+      });
+
+      if (!res.ok) {
+        throw new Error("Error al guardar en el servidor");
+      }
+
+      setContent(updatedContent);
+      setSaveMessage("Contenido guardado correctamente.");
+    } catch (err) {
+      console.error("Error guardando contenido:", err);
+      setSaveMessage("Error al guardar. Revisa el backend / consola.");
+    } finally {
+      setSavingContent(false);
+      setTimeout(() => setSaveMessage(""), 3000);
+    }
+  };
+
   /* ====== RENDER ====== */
 
   return (
@@ -686,7 +734,7 @@ function App() {
           </div>
         </SectionReveal>
 
-        {/* VIDA PARROQUIAL (ANTES GALERÍA) */}
+        {/* VIDA PARROQUIAL */}
         <SectionReveal id="comunidad" baseStyle={creamSectionStyle}>
           <div style={containerStyle}>
             <div style={sectionHeaderStyle}>
@@ -838,7 +886,35 @@ function App() {
         </SectionReveal>
       </main>
 
-      {/* PEQUEÑO LOADER OPCIONAL */}
+      {/* BOTÓN ADMIN ABAJO (NO FIJO) */}
+      <AdminBottomButton
+        colors={colors}
+        isAdmin={isAdmin}
+        onClick={handleAdminButtonClick}
+      />
+
+      {/* MODAL LOGIN */}
+      {showLoginModal && (
+        <LoginModal
+          colors={colors}
+          onClose={() => setShowLoginModal(false)}
+          onSuccess={handleAdminLoginSuccess}
+        />
+      )}
+
+      {/* PANEL DE EDICIÓN ADMIN */}
+      {isAdmin && showAdminPanel && (
+        <AdminEditor
+          colors={colors}
+          content={content}
+          onUpdateContent={setContent}
+          onSave={handleSaveContent}
+          saving={savingContent}
+          saveMessage={saveMessage}
+        />
+      )}
+
+      {/* LOADER */}
       {loadingContent && (
         <div
           style={{
@@ -851,6 +927,7 @@ function App() {
             backgroundColor: "rgba(15,23,42,0.9)",
             color: "#fff",
             fontSize: "0.75rem",
+            zIndex: 60,
           }}
         >
           Cargando contenido de la parroquia...
@@ -874,9 +951,7 @@ function useSectionReveal(threshold = 0.2) {
       ([entry]) => {
         setVisible(entry.isIntersecting);
       },
-      {
-        threshold,
-      }
+      { threshold }
     );
 
     observer.observe(node);
@@ -1113,6 +1188,606 @@ function CostRow({ label, price, colors }) {
       <span style={labelStyle}>{label}</span>
       <span style={priceStyle}>{price}</span>
     </div>
+  );
+}
+
+/* ====== BOTÓN ABAJO (NO FIJO) CON IGLESIA ====== */
+
+function AdminBottomButton({ colors, isAdmin, onClick }) {
+  const [hovered, setHovered] = useState(false);
+
+  const wrapperStyle = {
+    width: "100%",
+    padding: "0 24px 24px",
+    boxSizing: "border-box",
+    display: "flex",
+    justifyContent: "flex-end",
+  };
+
+  const innerStyle = {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  };
+
+  const buttonStyle = {
+    width: "36px",
+    height: "36px",
+    borderRadius: "999px",
+    border: "1px solid rgba(15,23,42,0.15)",
+    backgroundColor: hovered ? colors.accentGoldSoft : "#ffffff",
+    color: colors.accentGreen,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "1rem",
+    cursor: "pointer",
+    boxShadow: hovered
+      ? "0 8px 18px rgba(0,0,0,0.25)"
+      : "0 4px 10px rgba(0,0,0,0.18)",
+    transform: hovered ? "translateY(-1px) scale(1.02)" : "translateY(0) scale(1)",
+    transition:
+      "background-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease",
+  };
+
+  const badgeStyle = {
+    fontSize: "0.7rem",
+    color: colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  };
+
+  return (
+    <div style={wrapperStyle}>
+      <div style={innerStyle}>
+        {isAdmin && <div style={badgeStyle}>ADMIN</div>}
+        <button
+          type="button"
+          style={buttonStyle}
+          title={isAdmin ? "Editar contenido" : "Iniciar sesión"}
+          onClick={onClick}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+        >
+          ⛪
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ====== MODAL LOGIN ====== */
+
+function LoginModal({ colors, onClose, onSuccess }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const overlayStyle = {
+    position: "fixed",
+    inset: 0,
+    backgroundColor: "rgba(15,23,42,0.55)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 60,
+  };
+
+  const modalStyle = {
+    width: "100%",
+    maxWidth: "360px",
+    backgroundColor: "#ffffff",
+    borderRadius: "20px",
+    padding: "1.6rem 1.5rem 1.4rem",
+    boxShadow: "0 20px 40px rgba(0,0,0,0.3)",
+  };
+
+  const titleStyle = {
+    fontFamily: 'Georgia, "Times New Roman", serif',
+    fontSize: "1.4rem",
+    color: colors.accentGreen,
+    margin: "0 0 0.4rem",
+  };
+
+  const textStyle = {
+    fontSize: "0.9rem",
+    color: colors.textMuted,
+    margin: "0 0 1rem",
+  };
+
+  const labelStyle = {
+    fontSize: "0.8rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.12em",
+    color: colors.textMuted,
+    marginBottom: "0.25rem",
+  };
+
+  const inputStyle = {
+    width: "100%",
+    borderRadius: "999px",
+    border: `1px solid ${colors.borderSubtle}`,
+    padding: "0.55rem 0.9rem",
+    fontSize: "0.9rem",
+    marginBottom: "0.7rem",
+    outline: "none",
+  };
+
+  const actionsStyle = {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "0.6rem",
+    marginTop: "0.6rem",
+  };
+
+  const errorStyle = {
+    color: "#b91c1c",
+    fontSize: "0.8rem",
+    marginTop: "0.25rem",
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (password === "sanjo2025") {
+      setError("");
+      onSuccess();
+    } else {
+      setError("Contraseña incorrecta.");
+    }
+  };
+
+  return (
+    <div style={overlayStyle} onClick={onClose}>
+      <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
+        <h2 style={titleStyle}>Iniciar sesión</h2>
+        <p style={textStyle}>
+          Ingresa la contraseña para acceder al panel y editar horarios,
+          oraciones y textos de la parroquia.
+        </p>
+
+        <form onSubmit={handleSubmit}>
+          <div>
+            <div style={labelStyle}>Contraseña</div>
+            <input
+              type="password"
+              style={inputStyle}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+            />
+            {error && <div style={errorStyle}>{error}</div>}
+          </div>
+
+          <div style={actionsStyle}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                borderRadius: "999px",
+                border: `1px solid ${colors.borderSubtle}`,
+                backgroundColor: "#ffffff",
+                padding: "0.45rem 1rem",
+                fontSize: "0.8rem",
+                cursor: "pointer",
+              }}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              style={{
+                borderRadius: "999px",
+                border: "1px solid transparent",
+                backgroundColor: colors.accentGreen,
+                color: "#ffffff",
+                padding: "0.45rem 1.2rem",
+                fontSize: "0.8rem",
+                cursor: "pointer",
+                fontWeight: 600,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+              }}
+            >
+              Entrar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ====== PANEL ADMIN ====== */
+
+function AdminEditor({ colors, content, onUpdateContent, onSave, saving, saveMessage }) {
+  const panelStyle = {
+    position: "fixed",
+    right: "16px",
+    top: "88px",
+    bottom: "16px",
+    width: "320px",
+    maxWidth: "90vw",
+    backgroundColor: "#ffffff",
+    borderRadius: "18px",
+    boxShadow: "0 20px 40px rgba(0,0,0,0.3)",
+    zIndex: 58,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  };
+
+  const headerStyle = {
+    padding: "0.9rem 1rem",
+    borderBottom: `1px solid ${colors.borderSubtle}`,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  };
+
+  const titleStyle = {
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.12em",
+    color: colors.textMuted,
+  };
+
+  const bodyStyle = {
+    flex: 1,
+    overflowY: "auto",
+    padding: "0.8rem 1rem 1rem",
+    fontSize: "0.84rem",
+  };
+
+  const sectionTitleStyle = {
+    fontSize: "0.78rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.16em",
+    color: colors.textMuted,
+    marginTop: "0.5rem",
+    marginBottom: "0.3rem",
+  };
+
+  const labelStyle = {
+    fontSize: "0.75rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.12em",
+    color: colors.textMuted,
+    marginTop: "0.35rem",
+    marginBottom: "0.15rem",
+  };
+
+  const inputStyle = {
+    width: "100%",
+    borderRadius: "10px",
+    border: `1px solid ${colors.borderSubtle}`,
+    padding: "0.4rem 0.55rem",
+    fontSize: "0.8rem",
+    outline: "none",
+  };
+
+  const textareaStyle = {
+    ...inputStyle,
+    minHeight: "60px",
+    resize: "vertical",
+  };
+
+  const footerStyle = {
+    padding: "0.55rem 1rem 0.7rem",
+    borderTop: `1px solid ${colors.borderSubtle}`,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    fontSize: "0.75rem",
+  };
+
+  const badgeStyle = {
+    fontSize: "0.7rem",
+    color: colors.textMuted,
+  };
+
+  const saveButtonStyle = {
+    borderRadius: "999px",
+    border: "1px solid transparent",
+    backgroundColor: colors.accentGreen,
+    color: "#ffffff",
+    padding: "0.4rem 1rem",
+    fontSize: "0.78rem",
+    cursor: "pointer",
+    fontWeight: 600,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+  };
+
+  const statusStyle = {
+    fontSize: "0.7rem",
+    color: saveMessage?.startsWith("Error") ? "#b91c1c" : colors.accentGreen,
+    marginTop: "0.2rem",
+  };
+
+  const update = (path, value) => {
+    const parts = path.split(".");
+    const updated = { ...content };
+    let ref = updated;
+
+    for (let i = 0; i < parts.length - 1; i++) {
+      const key = parts[i];
+      ref[key] = Array.isArray(ref[key])
+        ? [...ref[key]]
+        : { ...ref[key] };
+      ref = ref[key];
+    }
+
+    ref[parts[parts.length - 1]] = value;
+    onUpdateContent(updated);
+  };
+
+  const updateArrayItem = (field, index, key, value) => {
+    const arr = [...content[field]];
+    arr[index] = { ...arr[index], [key]: value };
+    onUpdateContent({
+      ...content,
+      [field]: arr,
+    });
+  };
+
+  const updateCommunityPhoto = (index, key, value) => {
+    const photos = [...content.community.photos];
+    photos[index] = { ...photos[index], [key]: value };
+    onUpdateContent({
+      ...content,
+      community: {
+        ...content.community,
+        photos,
+      },
+    });
+  };
+
+  return (
+    <aside style={panelStyle}>
+      <div style={headerStyle}>
+        <div style={titleStyle}>Editor rápido</div>
+        <div style={badgeStyle}>Guardado en Supabase</div>
+      </div>
+
+      <div style={bodyStyle}>
+        {/* HERO */}
+        <div>
+          <div style={sectionTitleStyle}>Hero / Portada</div>
+          <div style={labelStyle}>Título (inicio)</div>
+          <input
+            style={inputStyle}
+            value={content.hero.titlePrefix}
+            onChange={(e) => update("hero.titlePrefix", e.target.value)}
+          />
+          <div style={labelStyle}>Título (San José)</div>
+          <input
+            style={inputStyle}
+            value={content.hero.titleHighlight}
+            onChange={(e) => update("hero.titleHighlight", e.target.value)}
+          />
+          <div style={labelStyle}>Chip</div>
+          <input
+            style={inputStyle}
+            value={content.hero.chip}
+            onChange={(e) => update("hero.chip", e.target.value)}
+          />
+          <div style={labelStyle}>Subtítulo</div>
+          <textarea
+            style={textareaStyle}
+            value={content.hero.subtitle}
+            onChange={(e) => update("hero.subtitle", e.target.value)}
+          />
+          <div style={labelStyle}>URL imagen hero</div>
+          <input
+            style={inputStyle}
+            value={content.hero.imageUrl}
+            onChange={(e) => update("hero.imageUrl", e.target.value)}
+          />
+        </div>
+
+        {/* HORARIOS */}
+        <div>
+          <div style={sectionTitleStyle}>Horarios de misa</div>
+          {content.schedules.map((s, idx) => (
+            <div key={s.id || idx} style={{ marginBottom: "0.35rem" }}>
+              <div
+                style={{
+                  fontSize: "0.7rem",
+                  color: colors.textMuted,
+                  marginBottom: "0.1rem",
+                }}
+              >
+                {s.id || `Horario ${idx + 1}`}
+              </div>
+              <input
+                style={inputStyle}
+                value={s.label}
+                onChange={(e) =>
+                  updateArrayItem("schedules", idx, "label", e.target.value)
+                }
+                placeholder="Etiqueta (Lunes a viernes...)"
+              />
+              <input
+                style={{ ...inputStyle, marginTop: "0.2rem" }}
+                value={s.hours}
+                onChange={(e) =>
+                  updateArrayItem("schedules", idx, "hours", e.target.value)
+                }
+                placeholder="Horas"
+              />
+              <input
+                style={{ ...inputStyle, marginTop: "0.2rem" }}
+                value={s.note || ""}
+                onChange={(e) =>
+                  updateArrayItem("schedules", idx, "note", e.target.value)
+                }
+                placeholder="Nota (opcional)"
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* ORACIONES */}
+        <div>
+          <div style={sectionTitleStyle}>Momentos de oración</div>
+          {content.prayers.map((p, idx) => (
+            <div key={idx} style={{ marginBottom: "0.4rem" }}>
+              <div
+                style={{
+                  fontSize: "0.7rem",
+                  color: colors.textMuted,
+                  marginBottom: "0.1rem",
+                }}
+              >
+                Oración {idx + 1}
+              </div>
+              <input
+                style={inputStyle}
+                value={p.title}
+                onChange={(e) =>
+                  updateArrayItem("prayers", idx, "title", e.target.value)
+                }
+                placeholder="Título"
+              />
+              <textarea
+                style={{ ...textareaStyle, marginTop: "0.2rem" }}
+                value={p.description}
+                onChange={(e) =>
+                  updateArrayItem("prayers", idx, "description", e.target.value)
+                }
+                placeholder="Descripción"
+              />
+              <input
+                style={{ ...inputStyle, marginTop: "0.2rem" }}
+                value={p.schedule}
+                onChange={(e) =>
+                  updateArrayItem("prayers", idx, "schedule", e.target.value)
+                }
+                placeholder="Horario"
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* VIDA PARROQUIAL */}
+        <div>
+          <div style={sectionTitleStyle}>Vida parroquial</div>
+          <div style={labelStyle}>Título de sección</div>
+          <input
+            style={inputStyle}
+            value={content.community.sectionTitle}
+            onChange={(e) =>
+              update("community.sectionTitle", e.target.value)
+            }
+          />
+          <div style={labelStyle}>Subtítulo</div>
+          <textarea
+            style={textareaStyle}
+            value={content.community.sectionSubtitle}
+            onChange={(e) =>
+              update("community.sectionSubtitle", e.target.value)
+            }
+          />
+
+          {content.community.photos.map((ph, idx) => (
+            <div key={idx} style={{ marginTop: "0.4rem" }}>
+              <div
+                style={{
+                  fontSize: "0.7rem",
+                  color: colors.textMuted,
+                  marginBottom: "0.1rem",
+                }}
+              >
+                Foto {idx + 1}
+              </div>
+              <input
+                style={inputStyle}
+                value={ph.title}
+                onChange={(e) =>
+                  updateCommunityPhoto(idx, "title", e.target.value)
+                }
+                placeholder="Título"
+              />
+              <textarea
+                style={{ ...textareaStyle, marginTop: "0.2rem" }}
+                value={ph.text}
+                onChange={(e) =>
+                  updateCommunityPhoto(idx, "text", e.target.value)
+                }
+                placeholder="Texto / descripción"
+              />
+              <input
+                style={{ ...inputStyle, marginTop: "0.2rem" }}
+                value={ph.imgUrl}
+                onChange={(e) =>
+                  updateCommunityPhoto(idx, "imgUrl", e.target.value)
+                }
+                placeholder="URL imagen"
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* CONTACTO */}
+        <div>
+          <div style={sectionTitleStyle}>Contacto</div>
+          <div style={labelStyle}>Título</div>
+          <input
+            style={inputStyle}
+            value={content.contact.title}
+            onChange={(e) => update("contact.title", e.target.value)}
+          />
+          <div style={labelStyle}>Descripción</div>
+          <textarea
+            style={textareaStyle}
+            value={content.contact.description}
+            onChange={(e) => update("contact.description", e.target.value)}
+          />
+          <div style={labelStyle}>Dirección</div>
+          <input
+            style={inputStyle}
+            value={content.contact.address}
+            onChange={(e) => update("contact.address", e.target.value)}
+          />
+          <div style={labelStyle}>Teléfono</div>
+          <input
+            style={inputStyle}
+            value={content.contact.phone}
+            onChange={(e) => update("contact.phone", e.target.value)}
+          />
+          <div style={labelStyle}>Horario oficina</div>
+          <input
+            style={inputStyle}
+            value={content.contact.officeHours}
+            onChange={(e) => update("contact.officeHours", e.target.value)}
+          />
+          <div style={labelStyle}>Correo</div>
+          <input
+            style={inputStyle}
+            value={content.contact.email}
+            onChange={(e) => update("contact.email", e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div style={footerStyle}>
+        <div>
+          <div style={badgeStyle}>
+            {saving ? "Guardando..." : "Cambios en vista previa"}
+          </div>
+          {saveMessage && <div style={statusStyle}>{saveMessage}</div>}
+        </div>
+        <button
+          type="button"
+          onClick={() => onSave(content)}
+          style={saveButtonStyle}
+          disabled={saving}
+        >
+          Guardar
+        </button>
+      </div>
+    </aside>
   );
 }
 
